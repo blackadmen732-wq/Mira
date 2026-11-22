@@ -13,6 +13,10 @@ HERE = Path(__file__).resolve().parent
 MIRA = os.environ.get("MIRA_BIN") or str(Path.home() / ".local/bin/mira")
 WORK = Path(os.environ.get("MIRA_WORKDIR", str(Path.home()))).expanduser()
 TOOLS = "Bash Read Write Edit Glob Grep WebFetch WebSearch TodoWrite mcp__computer"
+LEAN_PROMPT = ("You are Mira, Mark's own assistant on his Linux computer (a Chromebook's Linux side). You have his terminal (Bash), "
+               "his files (Read/Write/Edit/Glob/Grep) and, through the computer tools, his screen, mouse and keyboard: call screen_look "
+               "before clicking. Do what he asks directly, step by step, and check the result. Your answer is spoken aloud: reply in "
+               "1-3 short, warm sentences, no markdown, no code blocks unless he asks for code.")
 STATE = {"proc": None, "started": False}
 LOCK = threading.Lock()
 
@@ -103,7 +107,10 @@ class H(BaseHTTPRequestHandler):
         if not text: return self._json(400, {"error": "say something"})
         with LOCK:
             if STATE["proc"]: return self._json(409, {"error": "Mira is still working. Say stop first."})
-            args = [MIRA, mode, "-p", text, "--output-format", "stream-json", "--verbose", "--allowedTools", TOOLS]
+            # LEAN: Claude Code's full instructions + every tool are ~30k tokens, which the free GPU needs ~70 s to read each
+            # new conversation. The voice window sends a short prompt and only the tools it needs (~4k tokens, ~7x less).
+            args = [MIRA, mode, "-p", text, "--output-format", "stream-json", "--verbose", "--allowedTools", TOOLS,
+                    "--tools", "Bash,Read,Write,Edit,Glob,Grep", "--strict-mcp-config", "--system-prompt", LEAN_PROMPT]
             if STATE["started"]: args.append("--continue")                 # same conversation
             WORK.mkdir(parents=True, exist_ok=True)
             p = subprocess.Popen(args, cwd=str(WORK), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)

@@ -54,6 +54,8 @@ class UiTest(unittest.TestCase):
         calls = [json.loads(l) for l in open(self.fake + ".args")][-2:]
         self.assertNotIn("--continue", calls[0]); self.assertIn("--continue", calls[1])
         self.assertEqual(calls[1][:3], ["code", "-p", "two"])
+        self.assertIn("--strict-mcp-config", calls[1]); self.assertIn("Bash,Read,Write,Edit,Glob,Grep", calls[1])
+        self.assertIn("Mira", calls[1][calls[1].index("--system-prompt") + 1])
 
     def test_voice_comes_from_the_brain_with_its_password(self):
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
