@@ -73,7 +73,15 @@ def sh(cmd, **kw): return subprocess.run(cmd, shell=True, check=True, **kw)
 def main():
     if shutil.which("ollama") is None:
         print("Installing Ollama...", flush=True)
-        sh("(apt-get install -y -qq zstd >/dev/null 2>&1 || true) && curl -fsSL https://ollama.com/install.sh | sh >/dev/null")
+        # One download stream from GitHub crawls on Kaggle (~12% in 15 minutes), so fetch with 16 parallel streams.
+        sh("apt-get install -y -qq zstd aria2 >/dev/null 2>&1 || pip install -q aria2 >/dev/null 2>&1 || true")
+        url = "https://github.com/ollama/ollama/releases/latest/download/ollama-linux-amd64.tar.zst"
+        if shutil.which("aria2c"):
+            sh(f"aria2c -q -x16 -s16 -k4M --file-allocation=none -d /tmp -o ollama.tar.zst {url} && "
+               "tar --use-compress-program=unzstd -xf /tmp/ollama.tar.zst -C /usr/local && rm -f /tmp/ollama.tar.zst")
+        else:
+            sh("curl -fsSL https://ollama.com/install.sh | sh >/dev/null")
+        print("Ollama installed.", flush=True)
     env = {**os.environ, "OLLAMA_HOST": "127.0.0.1:11434", "OLLAMA_CONTEXT_LENGTH": CONTEXT, "OLLAMA_KEEP_ALIVE": "-1",
            "OLLAMA_MAX_LOADED_MODELS": "1", "OLLAMA_MODELS": "/tmp/ollama-models"}
     subprocess.Popen(["ollama", "serve"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
