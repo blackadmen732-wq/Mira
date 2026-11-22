@@ -46,26 +46,46 @@ class Gate(BaseHTTPRequestHandler):
         if not self._ok(): return self._send(401, {"type": "error", "error": {"type": "authentication_error", "message": "wrong Mira password"}})
         Gate.last[0] = time.time()
         if self.path == "/v1/audio/speech": return self._speech(body)
-        up = http.client.HTTPConnection(*OLLAMA, timeout=900)
+        try: streaming = bool(json.loads(body or b"{}").get("stream"))
+        except ValueError: streaming = False
+        box, ready = {}, threading.Event()
+        def call():                                       # ask Ollama in the background...
+            up = http.client.HTTPConnection(*OLLAMA, timeout=1800)
+            try:
+                up.request(self.command, self.path, body, {"content-type": self.headers.get("content-type", "application/json"),
+                                                           "anthropic-version": self.headers.get("anthropic-version", "2023-06-01")})
+                box["r"], box["up"] = up.getresponse(), up
+            except Exception as e: box["err"] = e; up.close()
+            ready.set()
+        threading.Thread(target=call, daemon=True).start()
+        chunk = lambda b: self.wfile.write(b"%x\r\n%s\r\n" % (len(b), b)) if b else None
         try:
-            up.request(self.command, self.path, body, {"content-type": self.headers.get("content-type", "application/json"),
-                                                       "anthropic-version": self.headers.get("anthropic-version", "2023-06-01")})
-            r = up.getresponse()
-            self.send_response(r.status)
-            for k in ("content-type", "cache-control"):
-                if r.getheader(k): self.send_header(k, r.getheader(k))
-            self.send_header("transfer-encoding", "chunked"); self.end_headers()
-            while True:
-                chunk = r.read1(65536)
-                if not chunk: break
-                self.wfile.write(b"%x\r\n%s\r\n" % (len(chunk), chunk)); self.wfile.flush()
-                Gate.last[0] = time.time()
-            self.wfile.write(b"0\r\n\r\n")
+            if streaming:
+                # ...and keep the line alive. Cloudflare's free tunnel drops a request that sends nothing for ~100 s
+                # (first live run: 524 while the model loaded and read Claude Code's ~20k-token instructions).
+                self.send_response(200); self.send_header("content-type", "text/event-stream"); self.send_header("cache-control", "no-cache")
+                self.send_header("transfer-encoding", "chunked"); self.end_headers()
+                chunk(b": thinking\n\n"); self.wfile.flush()             # the first byte goes out at once
+                while not ready.wait(10): chunk(b": thinking\n\n"); self.wfile.flush(); Gate.last[0] = time.time()
+                r = box.get("r")
+                if r is None or r.status != 200:
+                    msg = f"brain error: {box['err']}" if r is None else (r.read().decode("utf-8", "replace")[:500] or f"HTTP {r.status}")
+                    chunk(("event: error\ndata: " + json.dumps({"type": "error", "error": {"type": "api_error", "message": msg}}) + "\n\n").encode())
+                else:
+                    while True:
+                        b = r.read1(65536)
+                        if not b: break
+                        chunk(b); self.wfile.flush(); Gate.last[0] = time.time()
+                self.wfile.write(b"0\r\n\r\n"); self.wfile.flush()
+            else:
+                ready.wait(1800); r = box.get("r")
+                if r is None: return self._send(502, {"type": "error", "error": {"type": "api_error", "message": f"brain error: {box.get('err')}"}})
+                data = r.read(); self.send_response(r.status)
+                self.send_header("content-type", r.getheader("content-type") or "application/json"); self.send_header("content-length", str(len(data)))
+                self.end_headers(); self.wfile.write(data)
         except (BrokenPipeError, ConnectionResetError): pass
-        except Exception as e:
-            try: self._send(502, {"type": "error", "error": {"type": "api_error", "message": f"brain error: {e}"}})
-            except Exception: pass
-        finally: up.close()
+        finally:
+            if box.get("up"): box["up"].close()
 
     def _speech(self, body):
         """Mira's voice: Kokoro (free, Apache-2.0) on the same GPU. {"input": text, "voice": "af_heart", "speed": 1} -> WAV."""

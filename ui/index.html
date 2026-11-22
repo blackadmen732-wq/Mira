@@ -179,6 +179,15 @@
       }
     } catch (e) { final = 'I could not reach my brain: ' + e.message; failed = true; }
     busy = false;
+    if (failed) {                                                          // plain words instead of a wall of error text
+      const raw = final;
+      final = /524|timed? ?out|timeout/i.test(raw) ? "My brain took too long to answer. Ask again: it's much faster once it has warmed up."
+        : /401|password|authentication/i.test(raw) ? "My brain's password changed. Run the new mira connect line from Kaggle."
+        : /530|1033|ECONNREFUSED|ENOTFOUND|could not resolve|unavailable|connection/i.test(raw) ? 'My brain is off. Start it on Kaggle, then run its mira connect line.'
+        : /not found/i.test(raw) ? "My brain doesn't have that model loaded. Try Code mode."
+        : raw.slice(0, 200);
+      if (raw !== final) add('res err', esc(raw.slice(0, 600)));
+    }
     add('msg mira', `<div class="who">MIRA</div><div class="text">${esc(final || 'Done.')}</div>`);
     say(failed ? 'Something went wrong. Details on the right.' : 'Tap the orb or keep talking.');
     chimeDone();

@@ -10,6 +10,10 @@ class FakeOllama(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
+        if body["model"] == "slow": time.sleep(11)                  # a model still loading / reading a long prompt
+        if body["model"] == "missing":
+            self.send_response(404); self.send_header("content-type", "application/json"); self.end_headers()
+            self.wfile.write(b'{"error":"model not found"}'); return
         self.send_response(200); self.send_header("content-type", "text/event-stream"); self.end_headers()
         for w in ("hello ", "from ", body["model"]):
             self.wfile.write(f"data: {json.dumps({'text': w})}\n\n".encode()); self.wfile.flush(); time.sleep(0.05)
@@ -54,6 +58,27 @@ class GateTest(unittest.TestCase):
         c.request("POST", "/v1/messages", body=json.dumps({"model": "m2"}).encode(),
                   headers={"content-type": "application/json", "x-api-key": "s3cret-password-123"})
         r = c.getresponse(); self.assertEqual(r.status, 200); self.assertIn("m2", r.read().decode())
+
+    def stream(self, model):
+        req = urllib.request.Request(self.url + "/v1/messages", data=json.dumps({"model": model, "stream": True}).encode(),
+                                     headers={"content-type": "application/json", "x-api-key": "s3cret-password-123"})
+        t0, first = time.time(), None
+        with urllib.request.urlopen(req, timeout=30) as r:
+            out = b""
+            while True:
+                b = r.read1(4096)
+                if not b: break
+                first = first or time.time() - t0; out += b
+        return first, out.decode()
+
+    def test_slow_brain_keeps_the_line_alive(self):
+        first, text = self.stream("slow")
+        self.assertLess(first, 3)                                  # something arrives at once, long before any timeout
+        self.assertIn(": thinking", text); self.assertIn("slow", text)
+
+    def test_brain_error_arrives_as_a_stream_error(self):
+        _, text = self.stream("missing")
+        self.assertIn("event: error", text); self.assertIn("model not found", text)
 
     def test_requests_keep_it_awake(self):
         brain.Gate.last[0] = 0; self.call("/v1/messages", {"x-api-key": "s3cret-password-123"})
