@@ -86,20 +86,23 @@ VOICE = {"pipe": None, "status": "loading", "say": None}
 
 
 def load_voice():
-    """Loads in the background, so the brain is usable even if the voice fails."""
+    """Loads in the background, so the brain is usable even if the voice fails. kokoro-onnx (MIT) + Kokoro v1.0 weights
+    (Apache-2.0); the `kokoro` package itself doesn't support Kaggle's Python 3.13 yet."""
     try:
-        subprocess.run("(apt-get install -y -qq espeak-ng >/dev/null 2>&1 || true) && pip install -q 'kokoro>=0.9' soundfile >/dev/null 2>&1",
-                       shell=True, check=True)
+        d = "/tmp/kokoro"; os.makedirs(d, exist_ok=True)
+        subprocess.run("pip install -q kokoro-onnx soundfile >/dev/null 2>&1", shell=True, check=True)
+        base = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
+        for f in ("kokoro-v1.0.onnx", "voices-v1.0.bin"):
+            if not os.path.exists(f"{d}/{f}"): subprocess.run(["curl", "-fsSL", "-o", f"{d}/{f}", base + f], check=True)
         import io, threading as th
-        import numpy as np, soundfile as sf
-        from kokoro import KPipeline
-        pipe, lock = KPipeline(lang_code="a"), th.Lock()
+        import soundfile as sf
+        from kokoro_onnx import Kokoro
+        k, lock = Kokoro(f"{d}/kokoro-v1.0.onnx", f"{d}/voices-v1.0.bin"), th.Lock()
         def say(text, voice, speed):
-            with lock: parts = [a for _, _, a in pipe(text, voice=voice, speed=max(0.6, min(speed, 1.6))) if a is not None]
-            audio = np.concatenate([np.asarray(p, dtype=np.float32) for p in parts]) if parts else np.zeros(2400, np.float32)
-            buf = io.BytesIO(); sf.write(buf, audio, 24000, format="WAV"); return buf.getvalue()
-        say("Hi.", VOICE_NAME, 1.0)                                # warm up (downloads the voice once)
-        VOICE.update(pipe=pipe, say=say, status="ready"); print("Mira's voice is ready (Kokoro, " + VOICE_NAME + ").", flush=True)
+            with lock: audio, sr = k.create(text, voice=voice, speed=max(0.6, min(speed, 1.6)), lang="en-us")
+            buf = io.BytesIO(); sf.write(buf, audio, sr, format="WAV"); return buf.getvalue()
+        say("Hi.", VOICE_NAME, 1.0)
+        VOICE.update(pipe=k, say=say, status="ready"); print("Mira's voice is ready (Kokoro, " + VOICE_NAME + ").", flush=True)
     except Exception as e:
         VOICE["status"] = f"failed: {e}"; print(f"Mira's voice could not load ({e}); the page will use Chrome's voice.", flush=True)
 
