@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Mira: Claude Code's tools (files, terminal, coding) with an uncensored brain.
+#   mira connect <link> <password>   save the brain's link (printed by the Kaggle notebook)
+#   mira                             code, with the uncensored coder (Qwen3 Coder abliterated 30B)
+#   mira think                       the uncensored general model (Qwen3 abliterated 30B)
+#   mira cloud                       no Kaggle: Hermes 4 405B on OpenRouter (pay per use, cents)
+#   mira status                      is the brain on?
+# Anything after the mode goes to Claude Code, e.g.  mira -p "write a script that ..."
+set -euo pipefail
+CONF="${MIRA_HOME:-$HOME/.mira}"; mkdir -p "$CONF"; chmod 700 "$CONF"
+CODE_MODEL="huihui_ai/qwen3-coder-abliterated:30b"
+THINK_MODEL="huihui_ai/qwen3-abliterated:30b"
+CLOUD_MODEL="${MIRA_CLOUD_MODEL:-nousresearch/hermes-4-405b}"
+
+load() { [ -f "$CONF/brain.env" ] || { echo "No brain yet. Start the Kaggle notebook, then run the 'mira connect ...' line it prints."; exit 1; }; . "$CONF/brain.env"; }
+
+mode="${1:-code}"
+case "$mode" in
+  connect)
+    [ $# -eq 3 ] || { echo "usage: mira connect <link> <password>"; exit 1; }
+    [[ "$2" =~ ^https://[a-z0-9-]+\.trycloudflare\.com/?$ ]] || { echo "That doesn't look like the link from the notebook."; exit 1; }
+    umask 077; printf 'MIRA_URL=%q\nMIRA_TOKEN=%q\n' "${2%/}" "$3" > "$CONF/brain.env"
+    echo "Saved. Checking the brain..."; exec "$0" status ;;
+  status)
+    load
+    if curl -fsS -m 15 -H "x-api-key: $MIRA_TOKEN" "$MIRA_URL/v1/models" >/dev/null; then echo "Mira's brain is ON ($MIRA_URL)."
+    else echo "Mira's brain is OFF or the link changed. Start the Kaggle notebook again and run its 'mira connect' line."; exit 1; fi
+    exit 0 ;;
+  code|think) shift || true; load; URL="$MIRA_URL"; KEY="$MIRA_TOKEN"; MODEL=$([ "$mode" = think ] && echo "$THINK_MODEL" || echo "$CODE_MODEL") ;;
+  cloud)
+    shift
+    if [ ! -s "$CONF/openrouter.key" ]; then
+      read -rsp "Paste your OpenRouter key (it stays in $CONF on this computer): " k; echo
+      umask 077; printf '%s' "$k" > "$CONF/openrouter.key"
+    fi
+    URL="https://openrouter.ai/api"; KEY="$(cat "$CONF/openrouter.key")"; MODEL="$CLOUD_MODEL" ;;
+  *) load; URL="$MIRA_URL"; KEY="$MIRA_TOKEN"; MODEL="$CODE_MODEL" ;;   # `mira -p "..."` etc: coder
+esac
+
+command -v claude >/dev/null || { echo "Claude Code isn't installed: curl -fsSL https://claude.ai/install.sh | bash"; exit 1; }
+echo "Mira ($MODEL) is starting. Type /exit to leave."
+exec env ANTHROPIC_BASE_URL="$URL" ANTHROPIC_AUTH_TOKEN="$KEY" ANTHROPIC_API_KEY="" \
+  ANTHROPIC_MODEL="$MODEL" ANTHROPIC_DEFAULT_OPUS_MODEL="$MODEL" ANTHROPIC_DEFAULT_SONNET_MODEL="$MODEL" \
+  ANTHROPIC_DEFAULT_HAIKU_MODEL="$MODEL" CLAUDE_CODE_SUBAGENT_MODEL="$MODEL" \
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 API_TIMEOUT_MS=900000 \
+  claude --append-system-prompt "You are Mira, Mark's own coding assistant. Be direct and do the work." "$@"
