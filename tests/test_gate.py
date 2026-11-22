@@ -62,3 +62,19 @@ class GateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VoiceTest(unittest.TestCase):
+    def test_voice_needs_the_password_and_returns_audio(self):
+        brain.Gate.token = "s3cret-password-123"; g = serve(brain.Gate); url = f"http://127.0.0.1:{g.server_address[1]}/v1/audio/speech"
+        brain.VOICE.update(pipe=object(), say=lambda text, voice, speed: b"RIFF" + f"{voice}:{text}".encode(), status="ready")
+        def call(h):
+            r = urllib.request.Request(url, data=json.dumps({"input": "hello Mark"}).encode(), headers={"content-type": "application/json", **h})
+            try:
+                with urllib.request.urlopen(r, timeout=10) as x: return x.status, x.headers.get("content-type"), x.read()
+            except urllib.error.HTTPError as e: return e.code, None, b""
+        self.assertEqual(call({})[0], 401)
+        code, ctype, wav = call({"x-api-key": "s3cret-password-123"})
+        self.assertEqual((code, ctype), (200, "audio/wav")); self.assertEqual(wav, b"RIFFaf_heart:hello Mark")
+        brain.VOICE.update(pipe=None, status="loading")
+        self.assertEqual(call({"x-api-key": "s3cret-password-123"})[0], 503)

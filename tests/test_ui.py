@@ -55,6 +55,21 @@ class UiTest(unittest.TestCase):
         self.assertNotIn("--continue", calls[0]); self.assertIn("--continue", calls[1])
         self.assertEqual(calls[1][:3], ["code", "-p", "two"])
 
+    def test_voice_comes_from_the_brain_with_its_password(self):
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        import threading
+        got = {}
+        class FakeBrain(BaseHTTPRequestHandler):
+            def log_message(self, *a): pass
+            def do_POST(self):
+                got["key"] = self.headers.get("x-api-key"); got["body"] = json.loads(self.rfile.read(int(self.headers["content-length"])))
+                self.send_response(200); self.send_header("content-type", "audio/wav"); self.send_header("content-length", "4"); self.end_headers(); self.wfile.write(b"RIFF")
+        s = ThreadingHTTPServer(("127.0.0.1", 0), FakeBrain); threading.Thread(target=s.serve_forever, daemon=True).start()
+        open(os.path.join(self.dir, "brain.env"), "w").write(f"MIRA_URL=http://127.0.0.1:{s.server_address[1]}\nMIRA_TOKEN=tok-123\n")
+        r = urllib.request.Request(f"http://localhost:{PORT}/api/tts", data=json.dumps({"text": "hello"}).encode(), headers={"content-type": "application/json"})
+        with urllib.request.urlopen(r, timeout=10) as x: self.assertEqual((x.status, x.read()), (200, b"RIFF"))
+        self.assertEqual(got["key"], "tok-123"); self.assertEqual(got["body"]["input"], "hello"); self.assertEqual(got["body"]["voice"], "af_heart")
+
     def test_other_websites_are_refused(self):
         self.assertEqual(self.req("/api/ask", {"text": "x"}, {"origin": "https://evil.example"})[0], 403)
         r = urllib.request.Request(f"http://127.0.0.1:{PORT}/api/ask", data=b"text=x", headers={"content-type": "text/plain"})

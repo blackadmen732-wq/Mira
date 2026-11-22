@@ -4,7 +4,7 @@
 # what you said here, and this runs Mira (Claude Code with the uncensored brain + terminal + screen tools) in the
 # background, streaming every step back to the page, which shows them and speaks the answer.
 # Python standard library only. Listens on 127.0.0.1 only, and only answers pages opened from this computer.
-import json, os, signal, subprocess, sys, threading
+import json, os, signal, subprocess, sys, threading, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -25,6 +25,16 @@ def allowed(h):
     if origin is not None and origin not in (f"http://localhost:{PORT}", f"http://127.0.0.1:{PORT}"): return False
     if h.command == "POST" and not (h.headers.get("content-type") or "").startswith("application/json"): return False
     return True
+
+
+def brain():
+    """The brain's link + password, saved by `mira connect`."""
+    env, out = Path(os.environ.get("MIRA_HOME", str(Path.home() / ".mira"))) / "brain.env", {}
+    try:
+        for line in env.read_text().splitlines():
+            k, _, v = line.partition("="); out[k.strip()] = v.strip().strip("'\"")
+    except OSError: pass
+    return out.get("MIRA_URL"), out.get("MIRA_TOKEN")
 
 
 def steps(line):
@@ -77,6 +87,17 @@ class H(BaseHTTPRequestHandler):
             if p: os.killpg(p.pid, signal.SIGTERM)
             return self._json(200, {"stopped": bool(p)})
         if self.path == "/api/new": STATE["started"] = False; return self._json(200, {"ok": True})
+        if self.path == "/api/tts":                                         # Mira's own voice (Kokoro on the brain's GPU)
+            url, tok = brain()
+            if not url: return self._json(503, {"error": "no brain linked"})
+            req = urllib.request.Request(url + "/v1/audio/speech", data=json.dumps({"input": str(body.get("text", ""))[:2000],
+                                         "voice": body.get("voice") or "af_heart", "speed": body.get("speed") or 1.0}).encode(),
+                                         headers={"content-type": "application/json", "x-api-key": tok})
+            try:
+                with urllib.request.urlopen(req, timeout=60) as r: wav = r.read()
+            except (urllib.error.URLError, OSError) as e: return self._json(502, {"error": f"voice unavailable: {e}"})
+            self.send_response(200); self.send_header("content-type", "audio/wav"); self.send_header("content-length", str(len(wav)))
+            self.end_headers(); self.wfile.write(wav); return
         if self.path != "/api/ask": return self._json(404, {"error": "not found"})
         text, mode = str(body.get("text", "")).strip()[:8000], "think" if body.get("mode") == "think" else "code"
         if not text: return self._json(400, {"error": "say something"})

@@ -45,6 +45,7 @@ class Gate(BaseHTTPRequestHandler):
         if not self.path.startswith("/v1/"): return self._send(404, {"error": "not found"})
         if not self._ok(): return self._send(401, {"type": "error", "error": {"type": "authentication_error", "message": "wrong Mira password"}})
         Gate.last[0] = time.time()
+        if self.path == "/v1/audio/speech": return self._speech(body)
         up = http.client.HTTPConnection(*OLLAMA, timeout=900)
         try:
             up.request(self.command, self.path, body, {"content-type": self.headers.get("content-type", "application/json"),
@@ -66,7 +67,41 @@ class Gate(BaseHTTPRequestHandler):
             except Exception: pass
         finally: up.close()
 
+    def _speech(self, body):
+        """Mira's voice: Kokoro (free, Apache-2.0) on the same GPU. {"input": text, "voice": "af_heart", "speed": 1} -> WAV."""
+        if VOICE["pipe"] is None: return self._send(503, {"error": "voice not ready: " + VOICE["status"]})
+        try: j = json.loads(body or b"{}")
+        except ValueError: return self._send(400, {"error": "bad json"})
+        text = str(j.get("input", "")).strip()[:2000]
+        if not text: return self._send(400, {"error": "no text"})
+        wav = VOICE["say"](text, str(j.get("voice") or VOICE_NAME), float(j.get("speed") or 1.0))
+        self.send_response(200); self.send_header("content-type", "audio/wav"); self.send_header("content-length", str(len(wav)))
+        self.end_headers(); self.wfile.write(wav)
+
     do_GET = do_POST = _relay
+
+
+VOICE_NAME = os.environ.get("MIRA_VOICE", "af_heart")       # Kokoro's warm, sweet American female voice (its best-rated)
+VOICE = {"pipe": None, "status": "loading", "say": None}
+
+
+def load_voice():
+    """Loads in the background, so the brain is usable even if the voice fails."""
+    try:
+        subprocess.run("(apt-get install -y -qq espeak-ng >/dev/null 2>&1 || true) && pip install -q 'kokoro>=0.9' soundfile >/dev/null 2>&1",
+                       shell=True, check=True)
+        import io, threading as th
+        import numpy as np, soundfile as sf
+        from kokoro import KPipeline
+        pipe, lock = KPipeline(lang_code="a"), th.Lock()
+        def say(text, voice, speed):
+            with lock: parts = [a for _, _, a in pipe(text, voice=voice, speed=max(0.6, min(speed, 1.6))) if a is not None]
+            audio = np.concatenate([np.asarray(p, dtype=np.float32) for p in parts]) if parts else np.zeros(2400, np.float32)
+            buf = io.BytesIO(); sf.write(buf, audio, 24000, format="WAV"); return buf.getvalue()
+        say("Hi.", VOICE_NAME, 1.0)                                # warm up (downloads the voice once)
+        VOICE.update(pipe=pipe, say=say, status="ready"); print("Mira's voice is ready (Kokoro, " + VOICE_NAME + ").", flush=True)
+    except Exception as e:
+        VOICE["status"] = f"failed: {e}"; print(f"Mira's voice could not load ({e}); the page will use Chrome's voice.", flush=True)
 
 
 def sh(cmd, **kw): return subprocess.run(cmd, shell=True, check=True, **kw)
@@ -97,6 +132,7 @@ def main():
     first = MODELS.get(PULL[0].strip(), PULL[0].strip())
     sh(f"curl -s http://127.0.0.1:11434/api/generate -d '{json.dumps({'model': first, 'prompt': 'hi', 'stream': False})}' >/dev/null", env=env)
 
+    threading.Thread(target=load_voice, daemon=True).start()
     Gate.token = secrets.token_urlsafe(24)
     threading.Thread(target=ThreadingHTTPServer(("127.0.0.1", PORT), Gate).serve_forever, daemon=True).start()
     if not os.path.exists("/tmp/cloudflared"):
