@@ -26,12 +26,9 @@ git clone https://github.com/blackadmen732-wq/mira ~/mira && bash ~/mira/install
 
 ## Use it
 
-1. **Start the brain:** on Kaggle click **+ Create → New Notebook**. On the right, set **Accelerator = GPU T4 x2** and
-   **Internet = on**. Paste this into the first box and press **Shift+Enter**:
-   ```
-   !curl -fsSL https://raw.githubusercontent.com/blackadmen732-wq/mira/main/kaggle/brain.py -o brain.py && python -u brain.py
-   ```
-   (Next time, reopen that notebook from **Code** and press Shift+Enter again. It always fetches the newest Mira brain.)
+1. **Start the brain:** open https://www.kaggle.com/code/reviewboost/mira-brain (the ReviewBoost Kaggle account) →
+   **Edit** → check **Accelerator = GPU T4 x2** and **Internet = on** on the right → **Save Version → Save & Run All**.
+   It always runs the newest Mira brain from GitHub. Watch it under **Logs**.
 2. Wait about 5–10 minutes (the first part downloads the models). The output shows:
    ```
    MIRA'S BRAIN IS ON. On your computer, run this once:

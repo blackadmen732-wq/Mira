@@ -14,7 +14,9 @@ Owner: Mark. Keep his decisions; change only what he asks. Explain changes simpl
   type_text, press_key (xdotool), open_url (http/https only), list_windows, focus_window. Emergency stop: mouse within 5 px of the
   top-left corner refuses every action. install.sh copies it to ~/.mira and apt-installs xdotool scrot imagemagick tesseract-ocr wmctrl;
   `mira` passes it with --mcp-config and pre-approves mcp__computer. X11/Xwayland only: on a Chromebook = Linux apps only.
-- Push a new version: POST https://www.kaggle.com/api/v1/kernels/push with the script text (see kernel-metadata.json). Pushing starts a run.
+- Kaggle kernel reviewboost/mira-brain runs `kaggle/start.py` (downloads kernel brain.py from GitHub main and runs it), so a fix here
+  only needs a git push. Pushing the kernel (POST /api/v1/kernels/push) starts a run. Cancelling needs a session id the public API
+  doesn't expose: stop runs from Kaggle's "View Active Events". Ollama is fetched with aria2c (one stream crawled on Kaggle).
 - Tests: `python3 -m unittest tests/test_gate.py tests/test_computer.py` (fake xdotool/scrot/tesseract).
 
 ## Rules
