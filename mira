@@ -37,10 +37,16 @@ case "$mode" in
   *) load; URL="$MIRA_URL"; KEY="$MIRA_TOKEN"; MODEL="$CODE_MODEL" ;;   # `mira -p "..."` etc: coder
 esac
 
+# Mira's eyes and hands: screen, mouse, keyboard, windows (computer/computer_mcp.py, copied here by install.sh)
+EXTRA=()
+if [ -f "$CONF/computer_mcp.py" ]; then
+  EXTRA=(--mcp-config "{\"mcpServers\":{\"computer\":{\"command\":\"python3\",\"args\":[\"$CONF/computer_mcp.py\"]}}}" --allowedTools "mcp__computer")
+fi
 command -v claude >/dev/null || { echo "Claude Code isn't installed: curl -fsSL https://claude.ai/install.sh | bash"; exit 1; }
 echo "Mira ($MODEL) is starting. Type /exit to leave."
 exec env ANTHROPIC_BASE_URL="$URL" ANTHROPIC_AUTH_TOKEN="$KEY" ANTHROPIC_API_KEY="" \
   ANTHROPIC_MODEL="$MODEL" ANTHROPIC_DEFAULT_OPUS_MODEL="$MODEL" ANTHROPIC_DEFAULT_SONNET_MODEL="$MODEL" \
   ANTHROPIC_DEFAULT_HAIKU_MODEL="$MODEL" CLAUDE_CODE_SUBAGENT_MODEL="$MODEL" \
   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 API_TIMEOUT_MS=900000 \
-  claude --append-system-prompt "You are Mira, Mark's own coding assistant. Be direct and do the work." "$@"
+  claude "${EXTRA[@]}" --append-system-prompt "You are Mira, Mark's own assistant on his computer. Be direct and do the work. \
+You have his terminal (Bash) and, with the computer tools, his screen: screen_look first, then mouse_click / type_text / press_key." "$@"

@@ -9,9 +9,14 @@ Owner: Mark. Keep his decisions; change only what he asks. Explain changes simpl
 - `kaggle/brain.py`: Kaggle script kernel `reviewboost/mira-brain` (GPU T4 x2, internet). Installs Ollama (Anthropic Messages API
   compatible), pulls the two models into /tmp, puts the `Gate` password proxy (127.0.0.1:8000, /v1/ only, x-api-key or Bearer,
   random token per run) in front, opens a cloudflared quick tunnel, prints the `mira connect` line, exits after MIRA_IDLE_MINUTES (30) idle.
+- `computer/computer_mcp.py`: stdlib MCP server (stdio) = Mira's eyes and hands: screen_look (scrot/import screenshot shrunk to
+  MIRA_SCREEN_WIDTH 1280 + tesseract words with center x,y; coords scaled back to real pixels), mouse_click/move/drag, scroll,
+  type_text, press_key (xdotool), open_url (http/https only), list_windows, focus_window. Emergency stop: mouse within 5 px of the
+  top-left corner refuses every action. install.sh copies it to ~/.mira and apt-installs xdotool scrot imagemagick tesseract-ocr wmctrl;
+  `mira` passes it with --mcp-config and pre-approves mcp__computer. X11/Xwayland only: on a Chromebook = Linux apps only.
 - Push a new version: POST https://www.kaggle.com/api/v1/kernels/push with the script text (see kernel-metadata.json). Pushing starts a run.
-- Tests: `python3 -m unittest tests/test_gate.py`.
+- Tests: `python3 -m unittest tests/test_gate.py tests/test_computer.py` (fake xdotool/scrot/tesseract).
 
 ## Rules
-- Never commit keys or tokens. Never weaken the Gate (password + /v1/ only).
+- Never commit keys or tokens. Never weaken the Gate (password + /v1/ only). Keep the top-left-corner emergency stop.
 - Don't use Mark's Claude subscription tokens with other models; Mira only uses Claude Code with ANTHROPIC_BASE_URL.

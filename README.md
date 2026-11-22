@@ -9,6 +9,13 @@ terminal, builds and fixes code) with a different brain: an uncensored ("abliter
   - `mira think`: **Qwen3 abliterated 30B** for everything else
 - **No Kaggle?** `mira cloud` uses Hermes 4 405B on OpenRouter (pay per use, cents per session).
 - It doesn't use your Claude subscription. It only borrows Claude Code's tools.
+- **Full control of your computer:** your terminal (Claude Code's own), plus **eyes and hands**: it takes screenshots and
+  reads the words on screen, moves and clicks the mouse, types, presses keys (ctrl+c, alt+Tab…), scrolls, drags,
+  switches windows and opens web pages.
+  - On a **Chromebook** it controls the **Linux side**: the terminal and any Linux app (Linux Chrome/Firefox, VS Code…).
+    ChromeOS itself (the shelf, the normal Chrome browser, Android apps) is walled off by Google, so nothing can control it from Linux.
+  - **Emergency stop:** move the mouse into the **top-left corner** of the screen; every action is refused while it's there.
+    Or press **Ctrl+C** / Esc in Mira.
 
 ## Set up (once)
 
@@ -27,7 +34,8 @@ git clone https://github.com/blackadmen732-wq/mira ~/mira && bash ~/mira/install
        mira connect https://something.trycloudflare.com <password>
    ```
 3. Paste that line into your terminal (Chromebook: **Ctrl+Shift+V**).
-4. Go to the folder you want to work in and type `mira`. Talk to it like Claude Code.
+4. Go to the folder you want to work in and type `mira`. Talk to it like Claude Code, e.g. *"open firefox and find the Kalshi weather page"*.
+   Mira asks before running terminal commands; press **Shift+Tab** to switch on auto mode so it just does them.
 
 The link and password are new every time you start the brain, so repeat steps 1–3 each session.
 `mira status` tells you if the brain is on.
