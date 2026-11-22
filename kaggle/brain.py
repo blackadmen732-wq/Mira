@@ -39,10 +39,12 @@ class Gate(BaseHTTPRequestHandler):
         self.send_header("content-length", str(len(b))); self.end_headers(); self.wfile.write(b)
 
     def _relay(self):
+        # Always read the whole body first: the tunnel reuses connections, and an unread body would be taken as the
+        # start of the next request (found on the first live run: '{}POST' -> 501).
+        n = int(self.headers.get("content-length") or 0); body = self.rfile.read(n) if n else None
         if not self.path.startswith("/v1/"): return self._send(404, {"error": "not found"})
         if not self._ok(): return self._send(401, {"type": "error", "error": {"type": "authentication_error", "message": "wrong Mira password"}})
         Gate.last[0] = time.time()
-        n = int(self.headers.get("content-length") or 0); body = self.rfile.read(n) if n else None
         up = http.client.HTTPConnection(*OLLAMA, timeout=900)
         try:
             up.request(self.command, self.path, body, {"content-type": self.headers.get("content-type", "application/json"),

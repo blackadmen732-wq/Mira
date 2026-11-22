@@ -46,6 +46,15 @@ class GateTest(unittest.TestCase):
     def test_only_the_api_is_reachable(self):
         self.assertEqual(self.call("/api/pull", {"x-api-key": "s3cret-password-123"})[0], 404)
 
+    def test_refused_request_does_not_spoil_the_next_one_on_the_same_connection(self):
+        import http.client
+        c = http.client.HTTPConnection("127.0.0.1", self.gate.server_address[1], timeout=10)
+        c.request("POST", "/v1/messages", body=b'{"model": "x"}', headers={"content-type": "application/json"})
+        r = c.getresponse(); r.read(); self.assertEqual(r.status, 401)
+        c.request("POST", "/v1/messages", body=json.dumps({"model": "m2"}).encode(),
+                  headers={"content-type": "application/json", "x-api-key": "s3cret-password-123"})
+        r = c.getresponse(); self.assertEqual(r.status, 200); self.assertIn("m2", r.read().decode())
+
     def test_requests_keep_it_awake(self):
         brain.Gate.last[0] = 0; self.call("/v1/messages", {"x-api-key": "s3cret-password-123"})
         self.assertGreater(brain.Gate.last[0], time.time() - 5)
