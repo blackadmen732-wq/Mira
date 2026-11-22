@@ -5,6 +5,7 @@
 #   mira think                       the uncensored general model (Qwen3 abliterated 30B)
 #   mira cloud                       no Kaggle: Hermes 4 405B on OpenRouter (pay per use, cents)
 #   mira status                      is the brain on?
+#   mira ui                          Mira's voice window (talk instead of typing): http://localhost:3005
 # Anything after the mode goes to Claude Code, e.g.  mira -p "write a script that ..."
 set -euo pipefail
 CONF="${MIRA_HOME:-$HOME/.mira}"; mkdir -p "$CONF"; chmod 700 "$CONF"
@@ -16,6 +17,14 @@ load() { [ -f "$CONF/brain.env" ] || { echo "No brain yet. Start the Kaggle note
 
 mode="${1:-code}"
 case "$mode" in
+  ui)
+    UI="$CONF/ui/server.py"; [ -f "$UI" ] || UI="$(dirname "$(readlink -f "$0")")/ui/server.py"
+    if ! curl -fs -m 2 http://localhost:3005/api/status >/dev/null 2>&1; then
+      nohup python3 "$UI" >"$CONF/ui.log" 2>&1 &
+      for _ in $(seq 1 20); do curl -fs -m 1 http://localhost:3005/api/status >/dev/null 2>&1 && break; sleep 0.3; done
+    fi
+    xdg-open http://localhost:3005 >/dev/null 2>&1 || echo "Open http://localhost:3005 in Chrome."
+    exit 0 ;;
   connect)
     [ $# -eq 3 ] || { echo "usage: mira connect <link> <password>"; exit 1; }
     [[ "$2" =~ ^https://[a-z0-9-]+\.trycloudflare\.com/?$ ]] || { echo "That doesn't look like the link from the notebook."; exit 1; }

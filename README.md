@@ -41,6 +41,17 @@ git clone https://github.com/blackadmen732-wq/mira ~/mira && bash ~/mira/install
 The link and password are new every time you start the brain, so repeat steps 1–3 each session.
 `mira status` tells you if the brain is on.
 
+## Talk to it (voice window)
+
+![Mira's voice window](docs/mira-ui.png)
+
+Click the **Mira** icon in your app launcher (Chromebook: Linux apps folder), or run `mira ui`. It opens in Chrome:
+- **Tap the orb** (or Ctrl+Space) and say what you want. It shows every step on the right and **says the answer out loud**.
+- **Keep talking:** after each answer the mic opens again by itself. Stay quiet, or say "stop" / "that's all", to end.
+- **Wake word:** turn it on and just say *"Mira, …"* while the window is open.
+- **Code / Think** (top right) picks the brain. **Stop** (or Esc) stops what she's doing. **New** starts a fresh conversation.
+- She works in your home folder and can use the terminal, files, the screen, mouse and keyboard without asking each time.
+
 ## Good to know
 
 - Open models are weaker than Claude at long multi-step work. Give Mira one clear task at a time.
